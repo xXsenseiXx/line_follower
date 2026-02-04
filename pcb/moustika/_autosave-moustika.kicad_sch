@@ -3611,12 +3611,6 @@
 		(uuid "0bf58b27-e3a2-4874-9e01-298cc884abdc")
 	)
 	(junction
-		(at 196.85 119.38)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "4013ba5b-bcfa-457d-977c-380af7440f73")
-	)
-	(junction
 		(at 165.1 139.7)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3627,6 +3621,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "8aa96edc-1b89-41c1-94a6-f29e89c71b7b")
+	)
+	(junction
+		(at 207.01 118.11)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "8bc4fc14-fbb8-4663-ab44-c1c85fbaa4f4")
 	)
 	(junction
 		(at 148.59 139.7)
@@ -3764,6 +3764,16 @@
 	)
 	(wire
 		(pts
+			(xy 229.87 113.03) (xy 229.87 118.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "072ce54d-0836-4b0d-b219-ed69d5600fc4")
+	)
+	(wire
+		(pts
 			(xy 209.55 113.03) (xy 209.55 123.19)
 		)
 		(stroke
@@ -3841,6 +3851,16 @@
 			(type default)
 		)
 		(uuid "19dde850-fb2c-4f55-874f-a688d70cf6ae")
+	)
+	(wire
+		(pts
+			(xy 207.01 118.11) (xy 207.01 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "22aa9793-a11b-4d2f-9297-c9d6f6d685ca")
 	)
 	(wire
 		(pts
@@ -3944,16 +3964,6 @@
 	)
 	(wire
 		(pts
-			(xy 229.87 113.03) (xy 229.87 115.57)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3cbf76a9-a135-4a2d-912e-7526636066c6")
-	)
-	(wire
-		(pts
 			(xy 165.1 123.19) (xy 165.1 124.46)
 		)
 		(stroke
@@ -3981,16 +3991,6 @@
 			(type default)
 		)
 		(uuid "418367a6-4135-46af-b916-57e3a9bc1b3a")
-	)
-	(wire
-		(pts
-			(xy 229.87 115.57) (xy 246.38 115.57)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "4420e39a-9af6-47fb-a5c0-269fa2258e5c")
 	)
 	(wire
 		(pts
@@ -4211,16 +4211,6 @@
 			(type default)
 		)
 		(uuid "76bce4e6-2086-4a57-ae9c-365488630a55")
-	)
-	(wire
-		(pts
-			(xy 187.96 115.57) (xy 196.85 115.57)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7908e48c-1c24-4f11-99ed-e1ab9ecebc88")
 	)
 	(wire
 		(pts
@@ -4534,7 +4524,7 @@
 	)
 	(wire
 		(pts
-			(xy 207.01 119.38) (xy 207.01 113.03)
+			(xy 207.01 119.38) (xy 207.01 118.11)
 		)
 		(stroke
 			(width 0)
@@ -4701,16 +4691,6 @@
 			(type default)
 		)
 		(uuid "ce741b13-861c-4f46-80ce-7b696d5515fb")
-	)
-	(wire
-		(pts
-			(xy 196.85 115.57) (xy 196.85 119.38)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d060e3f5-5462-4633-9bca-c15f473da453")
 	)
 	(wire
 		(pts
@@ -4934,13 +4914,13 @@
 	)
 	(wire
 		(pts
-			(xy 246.38 115.57) (xy 246.38 116.84)
+			(xy 229.87 118.11) (xy 207.01 118.11)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "eeaa2c1b-389d-4528-ab51-922a446b925b")
+		(uuid "ed395e49-4463-4c24-98f0-cea0c9eee569")
 	)
 	(wire
 		(pts
@@ -5151,72 +5131,6 @@
 			(project "moustika"
 				(path "/7341a097-9ae3-4422-93dd-2d2a3cde0d26"
 					(reference "J5")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:+3.3V")
-		(at 187.96 115.57 180)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "1122a560-8ff8-4587-9910-de65fadce758")
-		(property "Reference" "#PWR018"
-			(at 187.96 111.76 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "+3.3V"
-			(at 187.96 120.65 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 187.96 115.57 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 187.96 115.57 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 187.96 115.57 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "9ba8d33a-be2f-497a-a609-193fd83e4500")
-		)
-		(instances
-			(project "moustika"
-				(path "/7341a097-9ae3-4422-93dd-2d2a3cde0d26"
-					(reference "#PWR018")
 					(unit 1)
 				)
 			)
@@ -7154,72 +7068,6 @@
 			(project ""
 				(path "/7341a097-9ae3-4422-93dd-2d2a3cde0d26"
 					(reference "U5")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:+3.3V")
-		(at 246.38 116.84 180)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "96f02023-66f2-4925-b8f0-170db9cbe2c5")
-		(property "Reference" "#PWR01"
-			(at 246.38 113.03 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "+3.3V"
-			(at 246.38 121.92 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 246.38 116.84 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 246.38 116.84 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 246.38 116.84 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "9b5bb3d8-444c-46f2-aed3-025a0a0d4adc")
-		)
-		(instances
-			(project "moustika"
-				(path "/7341a097-9ae3-4422-93dd-2d2a3cde0d26"
-					(reference "#PWR01")
 					(unit 1)
 				)
 			)
