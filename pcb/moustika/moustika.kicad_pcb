@@ -4871,7 +4871,7 @@
 		)
 		(pad "1" thru_hole circle
 			(at 0 0 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4883,7 +4883,7 @@
 		)
 		(pad "2" thru_hole circle
 			(at 0 2.54 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4895,7 +4895,7 @@
 		)
 		(pad "3" thru_hole circle
 			(at 0 5.08 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4907,7 +4907,7 @@
 		)
 		(pad "4" thru_hole circle
 			(at 0 7.62 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4919,7 +4919,7 @@
 		)
 		(pad "5" thru_hole circle
 			(at 0 10.16 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4931,7 +4931,7 @@
 		)
 		(pad "6" thru_hole circle
 			(at 0 12.7 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4943,7 +4943,7 @@
 		)
 		(pad "7" thru_hole circle
 			(at 0 15.24 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4955,7 +4955,7 @@
 		)
 		(pad "8" thru_hole circle
 			(at 0 17.78 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4967,7 +4967,7 @@
 		)
 		(pad "9" thru_hole circle
 			(at 0 20.32 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4979,7 +4979,7 @@
 		)
 		(pad "10" thru_hole circle
 			(at 0 22.86 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
@@ -4991,7 +4991,7 @@
 		)
 		(pad "11" thru_hole circle
 			(at 0 25.4 270)
-			(size 1.98 1.98)
+			(size 1.8 1.8)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
