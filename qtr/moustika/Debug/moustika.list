@@ -1,5 +1,5 @@
 
-QTR_test.elf:     file format elf32-littlearm
+moustika.elf:     file format elf32-littlearm
 
 Sections:
 Idx Name          Size      VMA       LMA       File off  Algn
