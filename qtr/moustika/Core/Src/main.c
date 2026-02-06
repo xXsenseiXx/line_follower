@@ -139,34 +139,6 @@ static void MX_TIM11_Init(void);
 /* USER CODE BEGIN PFP */
 
 
-void float_to_str(char *buf, float x, int decimals)
-{
-    int ip = (int)x;                 // integer part
-    float frac = x - ip;
-    if (frac < 0) frac = -frac;      // handle negatives
-
-    int scale = 1;
-    for (int i = 0; i < decimals; i++)
-        scale *= 10;
-
-    int fp = (int)(frac * scale + 0.5f); // rounding
-
-    // print manually
-    char *p = buf;
-
-    if (x < 0) *p++ = '-';
-
-    // integer part
-    p += sprintf(p, "%d", ip < 0 ? -ip : ip);
-
-    *p++ = '.';
-
-    // fractional part with leading zeros
-    sprintf(p, "%0*d", decimals, fp);
-}
-
-
-
 void SetMotorA(int speed) {
     // 1. Set Direction
     if (speed > 0) {
@@ -209,7 +181,45 @@ void SetMotorB(int speed) {
     __HAL_TIM_SET_COMPARE(PWMB_TIM_HANDLE, PWMB_CHANNEL, speed);
 }
 
+
+
+float D,P,I;
+float error , previos_error;
 float value_;
+
+float Pvalue;
+float Ivalue;
+float Dvalue;
+float leftspeed, rightspeed;;
+
+void float_to_str(char *buf, float x, int decimals)
+{
+    int ip = (int)x;                 // integer part
+    float frac = x - ip;
+    if (frac < 0) frac = -frac;      // handle negatives
+
+    int scale = 1;
+    for (int i = 0; i < decimals; i++)
+        scale *= 10;
+
+    int fp = (int)(frac * scale + 0.5f); // rounding
+
+    // print manually
+    char *p = buf;
+
+    if (x < 0) *p++ = '-';
+
+    // integer part
+    p += sprintf(p, "%d", ip < 0 ? -ip : ip);
+
+    *p++ = '.';
+
+    // fractional part with leading zeros
+    sprintf(p, "%0*d", decimals, fp);
+}
+
+
+
 float calculate_position(){
 	uint8_t onLine = 0;
     uint32_t avg;
@@ -249,7 +259,32 @@ float calculate_position(){
     return value_;
 }
 
+void pid(int kp ,int ki,int kd){
 
+	P = error;
+	I = I+ error;
+	D = error - previos_error;
+    Pvalue = kp*P;
+    Ivalue = ki*I;
+    Dvalue = kd*D;
+    float PIDvalue = Pvalue + Ivalue+ Dvalue;
+    previos_error = error;
+    leftspeed = 700 + PIDvalue;
+    rightspeed = 700 - PIDvalue;
+    if (leftspeed > 1000) {
+    	leftspeed = 1000;
+        }
+        if (leftspeed < -1000) {
+        	leftspeed = -1000;
+        }
+        if (rightspeed > 1000) {
+        	rightspeed = 1000;
+        }
+        if (rightspeed < -1000) {
+        	rightspeed = -1000;
+        }
+
+}
 
 void EnableMotors() {
     HAL_GPIO_WritePin(STBY_PORT, STBY_PIN, GPIO_PIN_SET);
@@ -349,6 +384,18 @@ int main(void)
       float_to_str(buf, position, 6);
 
       SSD1306_Puts(buf, &Font_7x10, 1);
+
+
+      error = 3500 - position;
+      // pid
+      pid(1,1,1);
+
+
+      // by applying this function  you gonna update this rightspeed , leftspeed
+
+
+
+
 
       // 3. Draw Graphs
       for (int i = 0; i < 8; i++)
