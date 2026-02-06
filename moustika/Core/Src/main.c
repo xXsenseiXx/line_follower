@@ -37,6 +37,7 @@
 
 uint16_t qtrValues[8];
 uint16_t linePos;
+uint16_t qtrCalibrated[8];
 float Kp = 0.1;   // Proportional (Reacts to current error)
 float Kd = 1.5;   // Derivative (Reacts to speed of change / dampens oscillation)
 float Ki = 0;
@@ -44,7 +45,7 @@ float Ki = 0;
 
 int lastError = 0; // To store previous error for calculating D
 
-int baseSpeed = 900;
+int baseSpeed = 800;
 int maxSpeed = 1000;
 // ==========================================
 // MOTOR DRIVER (TB6612FNG)
@@ -233,33 +234,34 @@ int main(void)
   while (1)
   {
 	  Kp = 0.57;
-	  Kd = 0;
-	  Ki = 0;
+	  Kd = 0.8;
+	  Ki = 0.02;
 	  calibrateQTR();
       linePos = CalculateLinePosition();
       Run_PID();
-//      int hamid = 2000;
-//      while (qtrValues[0] < hamid && qtrValues[1] < hamid && qtrValues[2] < hamid && qtrValues[3] < hamid && qtrValues[4] < hamid && qtrValues[5] < hamid && qtrValues[5] < hamid && qtrValues[6] < hamid && qtrValues[7] < hamid )
-//      {
-//    	  if(lastError>0){       //Turn left if the line was to the left before
-//
-//    		      	    SetMotorA(1000);
-//    		      	        	    	      		  SetMotorB(130);
-//    	      }
-//    	      else{
-//    	    	  SetMotorA(130);
-//    	    	      		      	      SetMotorB(1000);
-//
-//    	      }
-//
-//
-//
-//    	  linePos = CalculateLinePosition();
-//    	  SSD1306_GotoXY(0, 0);
-//		  SSD1306_Puts("blocked", &Font_7x10, 1);
-//		    SSD1306_UpdateScreen();
-//
-//      }
+      if (qtrCalibrated[0] ==0 && qtrCalibrated[1] ==0 && qtrCalibrated[2] ==0 && qtrCalibrated[3] ==0 && qtrCalibrated[4] ==0 && qtrCalibrated[5] ==0  && qtrCalibrated[6]==0 && qtrCalibrated[7]==0 ){
+      while (1)
+      {
+    	  calibrateQTR();
+    	  if(lastError>0){       //Turn left if the line was to the left before
+
+    		      	    SetMotorA(1000);
+    		      	     SetMotorB(-800);
+    	      }
+    	      else{
+    	    	  SetMotorA(-800);
+    	    	  SetMotorB(1000);
+
+    	      }
+
+
+
+    	  linePos = CalculateLinePosition();
+    	  DrawGraphScreen(linePos);
+    	  if (linePos > 3200 || linePos < 3800){
+    		  break;
+    	  }
+      }}
       // 2. Draw the results
       DrawGraphScreen(linePos);
 
@@ -777,12 +779,12 @@ uint16_t qtrCalibrated[8];
 
 
 int  ADC_MAX =4095;
-int  NOISE_FLOOR = 750 ;   // noise threshold
-int FULL_SPREAD = 350 ;   // sensors must be close to each other
-int  FULL_WHITE_MAX = 700 ;   // average below → white
-int FULL_BLACK_MIN = 3500  ; // average above → black
+int  NOISE_FLOOR = 660 ;   // noise threshold
+int FULL_SPREAD = 200 ;   // sensors must be close to each other
+int  FULL_WHITE_MAX = 650 ;   // average below → white
+int FULL_BLACK_MIN = 3800  ; // average above → black
 
-uint16_t qtrCalibrated[8];
+
 
 void calibrateQTR(void)
 {
