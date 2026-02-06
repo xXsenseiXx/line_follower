@@ -34,6 +34,18 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+uint16_t qtrValues[8];
+uint16_t linePos;
+float Kp = 0.1;   // Proportional (Reacts to current error)
+float Kd = 1.5;   // Derivative (Reacts to speed of change / dampens oscillation)
+float Ki = 0;
+// Ki is usually not needed for line followers, keeps it simple.
+
+int lastError = 0; // To store previous error for calculating D
+
+int baseSpeed = 900;
+int maxSpeed = 1000;
 // ==========================================
 // MOTOR DRIVER (TB6612FNG)
 // ==========================================
@@ -95,6 +107,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 
@@ -121,11 +134,14 @@ const char* menuItems[] = {
 
 uint8_t updateScreen = 1;
 
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_I2C1_Init(void);
@@ -133,67 +149,17 @@ static void MX_ADC1_Init(void);
 static void MX_TIM11_Init(void);
 /* USER CODE BEGIN PFP */
 
-void SetMotorA(int speed) {
-    // 1. Set Direction
-    if (speed > 0) {
-        HAL_GPIO_WritePin(AIN1_PORT, AIN1_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(AIN2_PORT, AIN2_PIN, GPIO_PIN_RESET);
-    } else if (speed < 0) {
-        HAL_GPIO_WritePin(AIN1_PORT, AIN1_PIN, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(AIN2_PORT, AIN2_PIN, GPIO_PIN_SET);
-        speed = -speed; // Make positive for PWM
-    } else {
-        HAL_GPIO_WritePin(AIN1_PORT, AIN1_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(AIN2_PORT, AIN2_PIN, GPIO_PIN_SET); // Brake
-    }
+void SetMotorA(int speed);
+void SetMotorB(int speed);
+void EnableMotors();
+void DisableMotors();
+uint8_t IsPressed(GPIO_TypeDef *Port, uint16_t Pin);
+uint16_t CalculateLinePosition(void);
 
-    // 2. Limit Speed
-    if (speed > 1000) speed = 1000;
+void DrawGraphScreen(uint16_t position);
 
-    // 3. Set PWM
-    __HAL_TIM_SET_COMPARE(PWMA_TIM_HANDLE, PWMA_CHANNEL, speed);
-}
+void Run_PID(void);
 
-void SetMotorB(int speed) {
-    // 1. Set Direction
-    if (speed > 0) {
-        HAL_GPIO_WritePin(BIN1_PORT, BIN1_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(BIN2_PORT, BIN2_PIN, GPIO_PIN_RESET);
-    } else if (speed < 0) {
-        HAL_GPIO_WritePin(BIN1_PORT, BIN1_PIN, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(BIN2_PORT, BIN2_PIN, GPIO_PIN_SET);
-        speed = -speed;
-    } else {
-        HAL_GPIO_WritePin(BIN1_PORT, BIN1_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(BIN2_PORT, BIN2_PIN, GPIO_PIN_SET); // Brake
-    }
-
-    // 2. Limit Speed
-    if (speed > 1000) speed = 1000;
-
-    // 3. Set PWM
-    __HAL_TIM_SET_COMPARE(PWMB_TIM_HANDLE, PWMB_CHANNEL, speed);
-}
-
-void EnableMotors() {
-    HAL_GPIO_WritePin(STBY_PORT, STBY_PIN, GPIO_PIN_SET);
-}
-
-void DisableMotors() {
-    HAL_GPIO_WritePin(STBY_PORT, STBY_PIN, GPIO_PIN_RESET);
-}
-
-uint8_t IsPressed(GPIO_TypeDef *Port, uint16_t Pin) {
-  if (HAL_GPIO_ReadPin(Port, Pin) == 0) {
-    HAL_Delay(50);
-    if (HAL_GPIO_ReadPin(Port, Pin) == 0) {
-      while (HAL_GPIO_ReadPin(Port, Pin) == 0)
-        ;
-      return 1;
-    }
-  }
-  return 0;
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -205,6 +171,7 @@ uint8_t IsPressed(GPIO_TypeDef *Port, uint16_t Pin) {
   * @brief  The application entry point.
   * @retval int
   */
+
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -229,6 +196,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_I2C1_Init();
@@ -245,56 +213,35 @@ int main(void)
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   EnableMotors();
+
+  if(HAL_ADC_Start_DMA(&hadc1, (uint32_t*)qtrValues, 8) != HAL_OK)
+  {
+      // DMA Start Error Handler (Optional: Print to OLED)
+      SSD1306_GotoXY(0,0);
+      SSD1306_Puts("DMA ERR", &Font_7x10, 1);
+      SSD1306_UpdateScreen();
+      Error_Handler();
+  }
+
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-      // --- PART A: TEST MOTORS ---
-      // Spin Forward
-      SetMotorA(400); // 40% speed
-      SetMotorB(400);
+	  Kp = 0.57;
+	  Kd = 0;
+	  Ki = 0;
+      linePos = CalculateLinePosition();
+      Run_PID();
+      // 2. Draw the results
+      DrawGraphScreen(linePos);
 
-      // Update OLED
-      SSD1306_Clear();
-      SSD1306_GotoXY(0,0); SSD1306_Puts("TEST: MOTORS FWD", &Font_7x10, 1);
+      // 3. Delay
+      //HAL_Delay(50);
 
-      // --- PART B: TEST SENSOR (ADC) ---
-      // Since DMA isn't ready, we manually read Channel 0 (PA0)
-      HAL_ADC_Start(&hadc1);
-      HAL_ADC_PollForConversion(&hadc1, 10); // Wait 10ms for read
-      uint32_t sensorVal = HAL_ADC_GetValue(&hadc1);
-
-      // Print Sensor Value
-      char buffer[20];
-      sprintf(buffer, "QTR-1: %lu", sensorVal);
-      SSD1306_GotoXY(0, 20); SSD1306_Puts(buffer, &Font_7x10, 1);
-
-      // Logic Check
-      if(sensorVal > 2000) {
-          SSD1306_GotoXY(0, 35); SSD1306_Puts("BLACK LINE!", &Font_7x10, 1);
-      } else {
-          SSD1306_GotoXY(0, 35); SSD1306_Puts("WHITE AREA", &Font_7x10, 1);
-      }
-
-      SSD1306_UpdateScreen();
-
-      HAL_Delay(1000); // Run for 1 second
-
-      // --- PART C: REVERSE MOTORS ---
-      SetMotorA(-400);
-      SetMotorB(-400);
-      SSD1306_Clear();
-      SSD1306_GotoXY(0,0); SSD1306_Puts("TEST: MOTORS REV", &Font_7x10, 1);
-      SSD1306_UpdateScreen();
-
-      HAL_Delay(1000); // Run for 1 second
-
-      // --- PART D: STOP ---
-      SetMotorA(0);
-      SetMotorB(0);
-      HAL_Delay(500);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -371,14 +318,14 @@ static void MX_ADC1_Init(void)
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.NbrOfConversion = 8;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -389,7 +336,70 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = 2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = 3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Rank = 4;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = 5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Rank = 6;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Rank = 7;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_7;
+  sConfig.Rank = 8;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -579,6 +589,22 @@ static void MX_TIM11_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -618,7 +644,172 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void SetMotorA(int speed) {
+    // 1. Set Direction
+    if (speed > 0) {
+        HAL_GPIO_WritePin(AIN1_PORT, AIN1_PIN, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(AIN2_PORT, AIN2_PIN, GPIO_PIN_RESET);
+    } else if (speed < 0) {
+        HAL_GPIO_WritePin(AIN1_PORT, AIN1_PIN, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(AIN2_PORT, AIN2_PIN, GPIO_PIN_SET);
+        speed = -speed; // Make positive for PWM
+    } else {
+        HAL_GPIO_WritePin(AIN1_PORT, AIN1_PIN, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(AIN2_PORT, AIN2_PIN, GPIO_PIN_SET); // Brake
+    }
 
+    // 2. Limit Speed
+    if (speed > 1000) speed = 1000;
+
+    // 3. Set PWM
+    __HAL_TIM_SET_COMPARE(PWMA_TIM_HANDLE, PWMA_CHANNEL, speed);
+}
+
+void SetMotorB(int speed) {
+    // 1. Set Direction
+    if (speed > 0) {
+        HAL_GPIO_WritePin(BIN1_PORT, BIN1_PIN, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BIN2_PORT, BIN2_PIN, GPIO_PIN_RESET);
+    } else if (speed < 0) {
+        HAL_GPIO_WritePin(BIN1_PORT, BIN1_PIN, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(BIN2_PORT, BIN2_PIN, GPIO_PIN_SET);
+        speed = -speed;
+    } else {
+        HAL_GPIO_WritePin(BIN1_PORT, BIN1_PIN, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BIN2_PORT, BIN2_PIN, GPIO_PIN_SET); // Brake
+    }
+
+    // 2. Limit Speed
+    if (speed > 1000) speed = 1000;
+
+    // 3. Set PWM
+    __HAL_TIM_SET_COMPARE(PWMB_TIM_HANDLE, PWMB_CHANNEL, speed);
+}
+
+void EnableMotors() {
+    HAL_GPIO_WritePin(STBY_PORT, STBY_PIN, GPIO_PIN_SET);
+}
+
+void DisableMotors() {
+    HAL_GPIO_WritePin(STBY_PORT, STBY_PIN, GPIO_PIN_RESET);
+}
+
+uint8_t IsPressed(GPIO_TypeDef *Port, uint16_t Pin) {
+  if (HAL_GPIO_ReadPin(Port, Pin) == 0) {
+    HAL_Delay(50);
+    if (HAL_GPIO_ReadPin(Port, Pin) == 0) {
+      while (HAL_GPIO_ReadPin(Port, Pin) == 0)
+        ;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+uint16_t CalculateLinePosition(void)
+{
+    uint32_t weightedSum = 0;
+    uint32_t totalSum = 0;
+    static uint16_t lastPosition = 3500;
+
+    for(int i = 0; i < 8; i++)
+    {
+        uint16_t val = qtrValues[i];
+
+        totalSum += val;
+        weightedSum += (val * (i * 1000));
+    }
+
+    if (totalSum < 500) {
+        return lastPosition;
+    }
+
+    uint16_t currentPosition = weightedSum / totalSum;
+
+    lastPosition = currentPosition;
+
+    return currentPosition;
+}
+
+void DrawGraphScreen(uint16_t position)
+{
+    char lcdBuffer[20];
+
+    // 1. Clear Screen buffer
+    SSD1306_Fill(0);
+
+    // 2. Print Stats
+    // Print Position
+    sprintf(lcdBuffer, "Pos: %d", position);
+    SSD1306_GotoXY(0, 0);
+    SSD1306_Puts(lcdBuffer, &Font_7x10, 1);
+
+    // Print Error (For PID tuning reference)
+    int error = (int)position - 3500;
+    sprintf(lcdBuffer, "Err: %d", error);
+    SSD1306_GotoXY(65, 0);
+    SSD1306_Puts(lcdBuffer, &Font_7x10, 1);
+
+    // 3. Draw Bar Graphs
+    for (int i = 0; i < 8; i++)
+    {
+        // Scaling: 4095 (Max ADC) -> 48 (Max Height)
+        uint8_t barHeight = (qtrValues[i] * 48) / 4095;
+
+        if(barHeight > 48) barHeight = 48;
+
+        uint8_t xPos = i * 16;
+        uint8_t yPos = 64 - barHeight;
+
+        // Draw solid bar
+        SSD1306_DrawFilledRectangle(xPos, yPos, 14, barHeight, 1);
+    }
+
+    uint8_t cursorX = (position * 128) / 7000;
+
+    SSD1306_DrawLine(cursorX, 15, cursorX, 64, 0);
+
+    // Draw a marker at the bottom
+    SSD1306_DrawPixel(cursorX, 0, 1);
+    SSD1306_DrawPixel(cursorX-1, 0, 1);
+    SSD1306_DrawPixel(cursorX+1, 0, 1);
+
+    SSD1306_UpdateScreen();
+}
+int I;
+void Run_PID(void)
+{
+    // 1. Get Position
+    uint16_t position = CalculateLinePosition();
+
+    // 2. Calculate Error
+    int error = position - 3500;
+
+    // 3. Calculate PID Terms
+    int P = error;
+    int D = error - lastError;
+    int I = I + error ;
+    lastError = error; // Save for next loop
+
+    // 4. Calculate Correction
+    // MotorSpeed = (Kp * P) + (Kd * D)
+    float motorSpeed = (float)(Kp * P) + (Kd * D) + (Ki*I);
+
+    // 5. Apply to Motors
+    // If error is positive (Right), Left Motor speeds up, Right slows down
+    int rightMotorSpeed = baseSpeed - motorSpeed;
+    int leftMotorSpeed = baseSpeed + motorSpeed;
+
+    // 6. Constrain Speeds (Don't exceed 1000 or go below -1000)
+    if (rightMotorSpeed > maxSpeed) rightMotorSpeed = maxSpeed;
+    if (leftMotorSpeed > maxSpeed) leftMotorSpeed = maxSpeed;
+    if (rightMotorSpeed < -1*maxSpeed) rightMotorSpeed = -1*maxSpeed;
+    if (leftMotorSpeed < -1*maxSpeed) leftMotorSpeed = -1*maxSpeed;
+
+    // 7. Output to Drivers
+    SetMotorA(leftMotorSpeed);
+    SetMotorB(rightMotorSpeed);
+}
 /* USER CODE END 4 */
 
 /**
