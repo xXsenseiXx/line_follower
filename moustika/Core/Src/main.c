@@ -159,6 +159,8 @@ uint16_t CalculateLinePosition(void);
 void DrawGraphScreen(uint16_t position);
 
 void Run_PID(void);
+void calibrateQTR(void);
+uint16_t calculate_position(void);
 
 /* USER CODE END PFP */
 
@@ -171,7 +173,6 @@ void Run_PID(void);
   * @brief  The application entry point.
   * @retval int
   */
-
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -234,8 +235,31 @@ int main(void)
 	  Kp = 0.57;
 	  Kd = 0;
 	  Ki = 0;
+	  calibrateQTR();
       linePos = CalculateLinePosition();
       Run_PID();
+//      int hamid = 2000;
+//      while (qtrValues[0] < hamid && qtrValues[1] < hamid && qtrValues[2] < hamid && qtrValues[3] < hamid && qtrValues[4] < hamid && qtrValues[5] < hamid && qtrValues[5] < hamid && qtrValues[6] < hamid && qtrValues[7] < hamid )
+//      {
+//    	  if(lastError>0){       //Turn left if the line was to the left before
+//
+//    		      	    SetMotorA(1000);
+//    		      	        	    	      		  SetMotorB(130);
+//    	      }
+//    	      else{
+//    	    	  SetMotorA(130);
+//    	    	      		      	      SetMotorB(1000);
+//
+//    	      }
+//
+//
+//
+//    	  linePos = CalculateLinePosition();
+//    	  SSD1306_GotoXY(0, 0);
+//		  SSD1306_Puts("blocked", &Font_7x10, 1);
+//		    SSD1306_UpdateScreen();
+//
+//      }
       // 2. Draw the results
       DrawGraphScreen(linePos);
 
@@ -706,6 +730,134 @@ uint8_t IsPressed(GPIO_TypeDef *Port, uint16_t Pin) {
   return 0;
 }
 
+
+uint16_t value_;
+uint16_t calculate_position(){
+	uint8_t onLine = 0;
+    uint32_t avg;
+    uint16_t sum;
+
+    int i;
+    for (i=0;i<8;i++){
+
+
+    	if (qtrValues[i] > 309.2) { onLine = 1; }
+
+  	  if (qtrValues[i] > 204.8)
+  	      {
+  	        avg += (uint32_t)qtrValues[i] * (i * 1000);
+  	        sum += qtrValues[i];
+  	      }
+
+
+    if (onLine == 0)
+    {
+      // If it last read to the left of center, return 0.
+      if (value_ < 7 * 1000 / 2)
+      {
+    	  return 0;
+
+      }
+      // If it last read to the right of center, return the max.
+      else
+      {
+
+    	  return 7 * 1000;
+      }
+    }
+    }
+
+    uint16_t currentPosition = (uint16_t)avg/sum;
+    return currentPosition;
+}
+
+
+
+uint16_t qtrCalibrated[8];
+
+
+int  ADC_MAX =4095;
+int  NOISE_FLOOR = 750 ;   // noise threshold
+int FULL_SPREAD = 350 ;   // sensors must be close to each other
+int  FULL_WHITE_MAX = 700 ;   // average below → white
+int FULL_BLACK_MIN = 3500  ; // average above → black
+
+uint16_t qtrCalibrated[8];
+
+void calibrateQTR(void)
+{
+    uint16_t min = qtrValues[0];
+    uint16_t max = qtrValues[0];
+    uint32_t sum = 0;
+
+    // Pass 1: stats
+    for (int i = 0; i < 8; i++)
+    {
+        uint16_t v = qtrValues[i];
+
+        if (v < min) min = v;
+        if (v > max) max = v;
+
+        sum += v;
+    }
+
+    uint16_t avg = sum / 8;
+    uint16_t spread = max - min;
+
+    // ===== PRIORITY OVERRIDE =====
+
+    // Full white → force LOW
+    if (spread < FULL_SPREAD && avg < FULL_WHITE_MAX)
+    {
+        memset(qtrCalibrated, 0, sizeof(qtrCalibrated));
+        return;
+    }
+
+    // Full black → force HIGH
+    if (spread < FULL_SPREAD && avg > FULL_BLACK_MIN)
+    {
+        for (int i = 0; i < 8; i++)
+            qtrCalibrated[i] = ADC_MAX;
+        return;
+    }
+
+    // ===== NORMAL CALIBRATION =====
+
+    if (max - min < NOISE_FLOOR)
+    {
+        memset(qtrCalibrated, 0, sizeof(qtrCalibrated));
+        return;
+    }
+
+    for (int i = 0; i < 8; i++)
+    {
+        int32_t v = qtrValues[i] - min;
+
+        if (v < NOISE_FLOOR)
+        {
+            qtrCalibrated[i] = 0;
+            continue;
+        }
+
+        // Normalize
+        uint32_t scaled = (v * ADC_MAX) / (max - min);
+
+        // Emphasize strong signals, suppress weak ones
+        scaled = (scaled * scaled) / ADC_MAX;
+
+        qtrCalibrated[i] = (uint16_t)scaled;
+    }
+}
+
+
+
+
+
+
+
+
+
+
 uint16_t CalculateLinePosition(void)
 {
     uint32_t weightedSum = 0;
@@ -714,7 +866,7 @@ uint16_t CalculateLinePosition(void)
 
     for(int i = 0; i < 8; i++)
     {
-        uint16_t val = qtrValues[i];
+        uint16_t val = qtrCalibrated[i];
 
         totalSum += val;
         weightedSum += (val * (i * 1000));
@@ -746,7 +898,8 @@ void DrawGraphScreen(uint16_t position)
 
     // Print Error (For PID tuning reference)
     int error = (int)position - 3500;
-    sprintf(lcdBuffer, "Err: %d", error);
+    //sprintf(lcdBuffer, "Err: %d", error);
+    sprintf(lcdBuffer, "V: %d", qtrValues[0]);
     SSD1306_GotoXY(65, 0);
     SSD1306_Puts(lcdBuffer, &Font_7x10, 1);
 
@@ -754,7 +907,8 @@ void DrawGraphScreen(uint16_t position)
     for (int i = 0; i < 8; i++)
     {
         // Scaling: 4095 (Max ADC) -> 48 (Max Height)
-        uint8_t barHeight = (qtrValues[i] * 48) / 4095;
+        uint8_t barHeight = (qtrCalibrated[i] * 48) / 4095;
+        //uint8_t barHeight = (qtrValues[i] * 48) / 4095;
 
         if(barHeight > 48) barHeight = 48;
 
@@ -788,7 +942,7 @@ void Run_PID(void)
     // 3. Calculate PID Terms
     int P = error;
     int D = error - lastError;
-    int I = I + error ;
+    I = I + error ;
     lastError = error; // Save for next loop
 
     // 4. Calculate Correction
