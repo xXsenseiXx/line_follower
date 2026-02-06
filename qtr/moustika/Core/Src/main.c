@@ -138,6 +138,35 @@ static void MX_ADC1_Init(void);
 static void MX_TIM11_Init(void);
 /* USER CODE BEGIN PFP */
 
+
+void float_to_str(char *buf, float x, int decimals)
+{
+    int ip = (int)x;                 // integer part
+    float frac = x - ip;
+    if (frac < 0) frac = -frac;      // handle negatives
+
+    int scale = 1;
+    for (int i = 0; i < decimals; i++)
+        scale *= 10;
+
+    int fp = (int)(frac * scale + 0.5f); // rounding
+
+    // print manually
+    char *p = buf;
+
+    if (x < 0) *p++ = '-';
+
+    // integer part
+    p += sprintf(p, "%d", ip < 0 ? -ip : ip);
+
+    *p++ = '.';
+
+    // fractional part with leading zeros
+    sprintf(p, "%0*d", decimals, fp);
+}
+
+
+
 void SetMotorA(int speed) {
     // 1. Set Direction
     if (speed > 0) {
@@ -180,6 +209,48 @@ void SetMotorB(int speed) {
     __HAL_TIM_SET_COMPARE(PWMB_TIM_HANDLE, PWMB_CHANNEL, speed);
 }
 
+float value_;
+float calculate_position(){
+	uint8_t onLine = 0;
+    uint32_t avg;
+    uint16_t sum;
+
+    int i;
+    for (i=0;i<8;i++){
+
+
+    	if (qtrValues[i] > 309.2) { onLine = 1; }
+
+  	  if (qtrValues[i] > 204.8)
+  	      {
+  	        avg += (uint32_t)qtrValues[i] * (i * 1000);
+  	        sum += qtrValues[i];
+  	      }
+
+
+    if (onLine == 0)
+    {
+      // If it last read to the left of center, return 0.
+      if (value_ < 7 * 1000 / 2)
+      {
+    	  return 0;
+
+      }
+      // If it last read to the right of center, return the max.
+      else
+      {
+
+    	  return 7 * 1000;
+      }
+    }
+    }
+
+    value_ = (float)avg/sum;
+    return value_;
+}
+
+
+
 void EnableMotors() {
     HAL_GPIO_WritePin(STBY_PORT, STBY_PIN, GPIO_PIN_SET);
 }
@@ -210,6 +281,9 @@ uint8_t IsPressed(GPIO_TypeDef *Port, uint16_t Pin) {
   * @brief  The application entry point.
   * @retval int
   */
+
+char buf[32];
+
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -271,7 +345,10 @@ int main(void)
 
       // 2. Draw Title
       SSD1306_GotoXY(0, 0);
-      SSD1306_Puts("QTR-8A Live", &Font_7x10, 1);
+      float position =calculate_position();
+      float_to_str(buf, position, 6);
+
+      SSD1306_Puts(buf, &Font_7x10, 1);
 
       // 3. Draw Graphs
       for (int i = 0; i < 8; i++)
@@ -300,7 +377,13 @@ int main(void)
       // 4. Update Screen
       SSD1306_UpdateScreen();
 
+
       // 5. Short delay
+
+
+
+
+
       HAL_Delay(50);
     /* USER CODE END WHILE */
 
