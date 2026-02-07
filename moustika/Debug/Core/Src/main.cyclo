@@ -13,8 +13,8 @@
 ../Core/Src/main.c:719:6:DisableMotors	1
 ../Core/Src/main.c:723:9:IsPressed	4
 ../Core/Src/main.c:737:10:calculate_position	6
-../Core/Src/main.c:789:6:calibrateQTR	12
-../Core/Src/main.c:863:10:CalculateLinePosition	3
-../Core/Src/main.c:888:6:DrawGraphScreen	3
-../Core/Src/main.c:936:6:Run_PID	5
-../Core/Src/main.c:975:6:Error_Handler	1
+../Core/Src/main.c:787:6:calibrateQTR	20
+../Core/Src/main.c:878:10:CalculateLinePosition	3
+../Core/Src/main.c:903:6:DrawGraphScreen	3
+../Core/Src/main.c:951:6:Run_PID	5
+../Core/Src/main.c:990:6:Error_Handler	1

@@ -784,22 +784,39 @@ int FULL_SPREAD = 200 ;   // sensors must be close to each other
 int  FULL_WHITE_MAX = 650 ;   // average below → white
 int FULL_BLACK_MIN = 3800  ; // average above → black
 
-
-
 void calibrateQTR(void)
 {
-    uint16_t min = qtrValues[0];
-    uint16_t max = qtrValues[0];
-    uint32_t sum = 0;
+    uint16_t filtered[8];
 
-    // Pass 1: stats
+    // ===== FAST 3-READ FILTER (NO FUNCTION CALLS) =====
     for (int i = 0; i < 8; i++)
     {
-        uint16_t v = qtrValues[i];
+        uint16_t a = qtrValues[i];
+        uint16_t b = qtrValues[i];
+        uint16_t c = qtrValues[i];
 
+        uint16_t ab = (a > b) ? (a - b) : (b - a);
+        uint16_t ac = (a > c) ? (a - c) : (c - a);
+        uint16_t bc = (b > c) ? (b - c) : (c - b);
+
+        if (ab <= ac && ab <= bc)
+            filtered[i] = (a + b) >> 1;
+        else if (ac <= ab && ac <= bc)
+            filtered[i] = (a + c) >> 1;
+        else
+            filtered[i] = (b + c) >> 1;
+    }
+
+    uint16_t min = filtered[0];
+    uint16_t max = filtered[0];
+    uint32_t sum = 0;
+
+    // ===== STATS =====
+    for (int i = 0; i < 8; i++)
+    {
+        uint16_t v = filtered[i];
         if (v < min) min = v;
         if (v > max) max = v;
-
         sum += v;
     }
 
@@ -808,14 +825,14 @@ void calibrateQTR(void)
 
     // ===== PRIORITY OVERRIDE =====
 
-    // Full white → force LOW
+    // Full white
     if (spread < FULL_SPREAD && avg < FULL_WHITE_MAX)
     {
         memset(qtrCalibrated, 0, sizeof(qtrCalibrated));
         return;
     }
 
-    // Full black → force HIGH
+    // Full black
     if (spread < FULL_SPREAD && avg > FULL_BLACK_MIN)
     {
         for (int i = 0; i < 8; i++)
@@ -825,7 +842,7 @@ void calibrateQTR(void)
 
     // ===== NORMAL CALIBRATION =====
 
-    if (max - min < NOISE_FLOOR)
+    if (spread < NOISE_FLOOR)
     {
         memset(qtrCalibrated, 0, sizeof(qtrCalibrated));
         return;
@@ -833,7 +850,7 @@ void calibrateQTR(void)
 
     for (int i = 0; i < 8; i++)
     {
-        int32_t v = qtrValues[i] - min;
+        int32_t v = filtered[i] - min;
 
         if (v < NOISE_FLOOR)
         {
@@ -841,16 +858,14 @@ void calibrateQTR(void)
             continue;
         }
 
-        // Normalize
-        uint32_t scaled = (v * ADC_MAX) / (max - min);
+        uint32_t scaled = (v * ADC_MAX) / spread;
 
-        // Emphasize strong signals, suppress weak ones
+        // Strong signals dominate
         scaled = (scaled * scaled) / ADC_MAX;
 
         qtrCalibrated[i] = (uint16_t)scaled;
     }
 }
-
 
 
 
