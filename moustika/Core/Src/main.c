@@ -38,6 +38,11 @@
 uint16_t qtrValues[8];
 uint16_t linePos;
 uint16_t qtrCalibrated[8];
+
+
+// External/Global arrays
+extern uint16_t qtrValues[8];
+uint16_t qtrCalibrated[8];
 float Kp = 0.1;   // Proportional (Reacts to current error)
 float Kd = 1.5;   // Derivative (Reacts to speed of change / dampens oscillation)
 float Ki = 0;
@@ -161,7 +166,7 @@ void DrawGraphScreen(uint16_t position);
 
 void Run_PID(void);
 void calibrateQTR(void);
-uint16_t calculate_position(void);
+void SetupTrackCalibration(void);
 
 /* USER CODE END PFP */
 
@@ -226,7 +231,7 @@ int main(void)
   }
 
 
-
+  SetupTrackCalibration();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -239,28 +244,30 @@ int main(void)
 	  calibrateQTR();
       linePos = CalculateLinePosition();
       Run_PID();
-      if (qtrCalibrated[0] ==0 && qtrCalibrated[1] ==0 && qtrCalibrated[2] ==0 && qtrCalibrated[3] ==0 && qtrCalibrated[4] ==0 && qtrCalibrated[5] ==0  && qtrCalibrated[6]==0 && qtrCalibrated[7]==0 ){
-      while (1)
-      {
-    	  calibrateQTR();
-    	  if(lastError>0){       //Turn left if the line was to the left before
+      if (qtrCalibrated[0] ==0 && qtrCalibrated[1] ==0 &&
+    	  qtrCalibrated[2] ==0 && qtrCalibrated[3] ==0
+		  && qtrCalibrated[4] ==0 && qtrCalibrated[5] ==0
+		  && qtrCalibrated[6]==0 && qtrCalibrated[7]==0 ){
+    	  SetMotorA(1000);
+    	  SetMotorB(1000);
+    	  HAL_Delay(100);
+    	  while (1)
+    	  	  {
+    		  	  calibrateQTR();
+    		  	  if(lastError>0){
+    		      	    SetMotorA(700);
+    		      	    SetMotorB(-500);
+    		  	  }
+    		  	  else{
+    		  		  SetMotorA(-500);
+    		  		  SetMotorB(700);
 
-    		      	    SetMotorA(1000);
-    		      	     SetMotorB(-800);
-    	      }
-    	      else{
-    	    	  SetMotorA(-800);
-    	    	  SetMotorB(1000);
-
-    	      }
-
-
-
+    		  	  }
     	  linePos = CalculateLinePosition();
-    	  DrawGraphScreen(linePos);
-    	  if (linePos > 3200 || linePos < 3800){
+    	  if (linePos > 2000 && linePos < 4100){
     		  break;
     	  }
+    	  DrawGraphScreen(linePos);
       }}
       // 2. Draw the results
       DrawGraphScreen(linePos);
@@ -734,87 +741,37 @@ uint8_t IsPressed(GPIO_TypeDef *Port, uint16_t Pin) {
 
 
 uint16_t value_;
-uint16_t calculate_position(){
-	uint8_t onLine = 0;
-    uint32_t avg;
-    uint16_t sum;
-
-    int i;
-    for (i=0;i<8;i++){
-
-
-    	if (qtrValues[i] > 309.2) { onLine = 1; }
-
-  	  if (qtrValues[i] > 204.8)
-  	      {
-  	        avg += (uint32_t)qtrValues[i] * (i * 1000);
-  	        sum += qtrValues[i];
-  	      }
-
-
-    if (onLine == 0)
-    {
-      // If it last read to the left of center, return 0.
-      if (value_ < 7 * 1000 / 2)
-      {
-    	  return 0;
-
-      }
-      // If it last read to the right of center, return the max.
-      else
-      {
-
-    	  return 7 * 1000;
-      }
-    }
-    }
-
-    uint16_t currentPosition = (uint16_t)avg/sum;
-    return currentPosition;
-}
 
 
 
 uint16_t qtrCalibrated[8];
 
 
-int  ADC_MAX =4095;
+/*int  ADC_MAX =4095;
 int  NOISE_FLOOR = 660 ;   // noise threshold
 int FULL_SPREAD = 200 ;   // sensors must be close to each other
 int  FULL_WHITE_MAX = 650 ;   // average below → white
-int FULL_BLACK_MIN = 3800  ; // average above → black
+int FULL_BLACK_MIN = 3800  ; // average above → black*/
+
+int ADC_MAX = 4095;
+int NOISE_FLOOR = 0;      // Will be calculated
+int FULL_SPREAD = 0;      // Will be calculated
+int FULL_WHITE_MAX = 0;   // Will be calculated
+int FULL_BLACK_MIN = 0;   // Will be calculated
+int BLACK_THRESHOLD = 0;
+int BLACK_THRESHOLD_pos = 0;
+
 
 void calibrateQTR(void)
 {
-    uint16_t filtered[8];
-
-    // ===== FAST 3-READ FILTER (NO FUNCTION CALLS) =====
-    for (int i = 0; i < 8; i++)
-    {
-        uint16_t a = qtrValues[i];
-        uint16_t b = qtrValues[i];
-        uint16_t c = qtrValues[i];
-
-        uint16_t ab = (a > b) ? (a - b) : (b - a);
-        uint16_t ac = (a > c) ? (a - c) : (c - a);
-        uint16_t bc = (b > c) ? (b - c) : (c - b);
-
-        if (ab <= ac && ab <= bc)
-            filtered[i] = (a + b) >> 1;
-        else if (ac <= ab && ac <= bc)
-            filtered[i] = (a + c) >> 1;
-        else
-            filtered[i] = (b + c) >> 1;
-    }
-
-    uint16_t min = filtered[0];
-    uint16_t max = filtered[0];
+    uint16_t min = qtrValues[0];
+    uint16_t max = qtrValues[0];
     uint32_t sum = 0;
 
-    // ===== STATS =====
+    // Pass 1: Statistics
     for (int i = 0; i < 8; i++)
     {
-        uint16_t v = filtered[i];
+        uint16_t v = qtrValues[i];
         if (v < min) min = v;
         if (v > max) max = v;
         sum += v;
@@ -825,14 +782,14 @@ void calibrateQTR(void)
 
     // ===== PRIORITY OVERRIDE =====
 
-    // Full white
+    // Full white (Low Spread AND Low Average) -> force LOW
     if (spread < FULL_SPREAD && avg < FULL_WHITE_MAX)
     {
         memset(qtrCalibrated, 0, sizeof(qtrCalibrated));
         return;
     }
 
-    // Full black
+    // Full black (Low Spread AND High Average) -> force HIGH
     if (spread < FULL_SPREAD && avg > FULL_BLACK_MIN)
     {
         for (int i = 0; i < 8; i++)
@@ -842,7 +799,7 @@ void calibrateQTR(void)
 
     // ===== NORMAL CALIBRATION =====
 
-    if (spread < NOISE_FLOOR)
+    if (max - min < NOISE_FLOOR)
     {
         memset(qtrCalibrated, 0, sizeof(qtrCalibrated));
         return;
@@ -850,30 +807,37 @@ void calibrateQTR(void)
 
     for (int i = 0; i < 8; i++)
     {
-        int32_t v = filtered[i] - min;
+        // ===== THE HARD FILTER =====
+        // If this specific sensor is not "Dark Enough" to be part of the line,
+        // we kill it immediately.
+        // This removes the "White Noise" flickering completely.
+        if (qtrValues[i] < BLACK_THRESHOLD || qtrValues[i] > BLACK_THRESHOLD_pos)
+        {
+             qtrCalibrated[i] = 0;
+             continue;
+        }
 
+        // Standard Normalization
+        int32_t v = qtrValues[i] - min;
+
+        // Extra noise check
         if (v < NOISE_FLOOR)
         {
             qtrCalibrated[i] = 0;
             continue;
         }
 
-        uint32_t scaled = (v * ADC_MAX) / spread;
+        uint32_t scaled = (v * ADC_MAX) / (max - min);
 
-        // Strong signals dominate
+        // Square for contrast
         scaled = (scaled * scaled) / ADC_MAX;
+
+        // Clamp
+        if (scaled > ADC_MAX) scaled = ADC_MAX;
 
         qtrCalibrated[i] = (uint16_t)scaled;
     }
 }
-
-
-
-
-
-
-
-
 
 uint16_t CalculateLinePosition(void)
 {
@@ -913,8 +877,6 @@ void DrawGraphScreen(uint16_t position)
     SSD1306_GotoXY(0, 0);
     SSD1306_Puts(lcdBuffer, &Font_7x10, 1);
 
-    // Print Error (For PID tuning reference)
-    int error = (int)position - 3500;
     //sprintf(lcdBuffer, "Err: %d", error);
     sprintf(lcdBuffer, "V: %d", qtrValues[0]);
     SSD1306_GotoXY(65, 0);
@@ -981,7 +943,57 @@ void Run_PID(void)
     SetMotorA(leftMotorSpeed);
     SetMotorB(rightMotorSpeed);
 }
-/* USER CODE END 4 */
+
+void SetupTrackCalibration(void)
+{
+    uint16_t globalMin = 4095;
+    uint16_t globalMax = 0;
+
+    memset(qtrCalibrated, 0, sizeof(qtrCalibrated));
+    int calibration_loops = 1000000;
+
+    while(calibration_loops > 0)
+    {
+        uint32_t currentSum = 0;
+        uint16_t currentMin = 4095;
+        uint16_t currentMax = 0;
+
+        for(int i = 0; i < 8; i++)
+        {
+            uint16_t val = qtrValues[i];
+            currentSum += val;
+            if(val < currentMin) currentMin = val;
+            if(val > currentMax) currentMax = val;
+        }
+
+        uint16_t currentAvg = currentSum / 8;
+        if(currentAvg < globalMin) globalMin = currentAvg;
+        if(currentAvg > globalMax) globalMax = currentAvg;
+
+        calibration_loops--;
+    }
+
+    uint16_t dynamicRange = globalMax - globalMin;
+
+    if (dynamicRange < 500) {
+        globalMin = 100;
+        globalMax = 3800;
+        dynamicRange = 3700;
+    }
+
+    FULL_WHITE_MAX = globalMin + (dynamicRange * 20 / 100);
+    FULL_BLACK_MIN = globalMax - (dynamicRange * 20 / 100);
+    NOISE_FLOOR = dynamicRange * 15 / 100;
+    FULL_SPREAD = dynamicRange * 20 / 100;
+
+    // ===== THE FILTER FIX =====
+    // We set the threshold relative to the BLACKEST point found.
+    // We allow a margin (e.g. 800) so we can still see the edges of the line.
+    // If you want it stricter, decrease 800 to 400.
+    // Do NOT go below 200 or PID will fail.
+    BLACK_THRESHOLD = globalMax - 600;
+    BLACK_THRESHOLD_pos = globalMax + 100;
+}/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.
