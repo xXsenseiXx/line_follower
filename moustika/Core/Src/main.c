@@ -39,13 +39,19 @@ uint16_t qtrValues[8];
 uint16_t linePos;
 uint16_t qtrCalibrated[8];
 
+uint32_t lastPidTime = 0;
+uint32_t lastScreenTime = 0;
 
+int LINE_TH = 50;
 // External/Global arrays
 extern uint16_t qtrValues[8];
 uint16_t qtrCalibrated[8];
-float Kp = 0.1;   // Proportional (Reacts to current error)
-float Kd = 1.5;   // Derivative (Reacts to speed of change / dampens oscillation)
+float Kp = 0.4;
+float Kd = 6;
 float Ki = 0;
+
+int sharp_right = 0;
+int sharp_left = 0;
 // Ki is usually not needed for line followers, keeps it simple.
 
 int lastError = 0; // To store previous error for calculating D
@@ -238,39 +244,87 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  Kp = 0.57;
-	  Kd = 0.8;
-	  Ki = 0.02;
-	  calibrateQTR();
-      linePos = CalculateLinePosition();
-      Run_PID();
-      if (qtrCalibrated[0] ==0 && qtrCalibrated[1] ==0 &&
-    	  qtrCalibrated[2] ==0 && qtrCalibrated[3] ==0
-		  && qtrCalibrated[4] ==0 && qtrCalibrated[5] ==0
-		  && qtrCalibrated[6]==0 && qtrCalibrated[7]==0 ){
-    	  SetMotorA(1000);
-    	  SetMotorB(1000);
-    	  HAL_Delay(100);
-    	  while (1)
-    	  	  {
-    		  	  calibrateQTR();
-    		  	  if(lastError>0){
-    		      	    SetMotorA(700);
-    		      	    SetMotorB(-500);
-    		  	  }
-    		  	  else{
-    		  		  SetMotorA(-500);
-    		  		  SetMotorB(700);
 
-    		  	  }
-    	  linePos = CalculateLinePosition();
-    	  if (linePos > 2000 && linePos < 4100){
-    		  break;
-    	  }
-    	  DrawGraphScreen(linePos);
-      }}
-      // 2. Draw the results
-      DrawGraphScreen(linePos);
+      if (HAL_GetTick() - lastPidTime >= 1)
+      {
+          lastPidTime = HAL_GetTick();
+
+          calibrateQTR();
+          linePos = CalculateLinePosition();
+          Run_PID();
+
+          int leftSide   = (qtrCalibrated[0] > LINE_TH) + (qtrCalibrated[1] > LINE_TH) + (qtrCalibrated[2] > LINE_TH);
+          int rightSide  = (qtrCalibrated[5] > LINE_TH) + (qtrCalibrated[6] > LINE_TH) + (qtrCalibrated[7] > LINE_TH);
+          int center     = (qtrCalibrated[3] > LINE_TH) + (qtrCalibrated[4] > LINE_TH);
+
+          int totalActive = leftSide + rightSide + center;
+
+          if(leftSide >= 2 && rightSide == 0) {
+              sharp_left = 1;
+              sharp_right = 0; // Clear the other flag to be safe
+          }
+          if(rightSide >= 2 && leftSide == 0) {
+              sharp_left = 0;
+              sharp_right = 1; // Clear the other flag to be safe
+          }
+
+          if (totalActive <= 1)
+                    {
+                        // Brake briefly to stop forward momentum before spinning
+                        SetMotorA(0);
+                        SetMotorB(0);
+                        HAL_Delay(50);
+
+                        while (1)
+                        {
+                            calibrateQTR();
+                            linePos = CalculateLinePosition(); // Just to get raw values updated
+
+                            // EXIT CONDITION: Center sensors see the line
+                            if (qtrCalibrated[3] > LINE_TH || qtrCalibrated[4] > LINE_TH) {
+                                // Reset flags and exit recovery
+                                sharp_left = 0;
+                                sharp_right = 0;
+                                lastError = 0; // Reset PID memory
+                                break;
+                            }
+
+                            // MOVEMENT LOGIC (Must use ELSE IF)
+                            if(sharp_left) {
+                                // We remembered a left turn -> Spin Left
+                                SetMotorA(-700); // Reduced from 1000 to catch line easier
+                                SetMotorB(700);
+                            }
+                            else if(sharp_right) {
+                                // We remembered a right turn -> Spin Right
+                                SetMotorA(700);
+                                SetMotorB(-700);
+                            }
+                            else {
+                                // No flag set? Use PID History (Standard Gap)
+                                if(lastError > 0) {
+                                     // Lost to the Right -> Spin Right
+                                     SetMotorA(700);
+                                     SetMotorB(-700);
+                                }
+                                else {
+                                     // Lost to the Left -> Spin Left
+                                     SetMotorA(-700);
+                                     SetMotorB(700);
+                                }
+                            }
+                            // Small delay to prevent CPU hogging in while loop (optional)
+                            // HAL_Delay(1);
+                        }
+                    }
+
+      }
+
+      if (HAL_GetTick() - lastScreenTime >= 100)
+      {
+          lastScreenTime = HAL_GetTick();
+          DrawGraphScreen(linePos);
+      }
 
       // 3. Delay
       //HAL_Delay(50);
@@ -845,25 +899,55 @@ uint16_t CalculateLinePosition(void)
     uint32_t totalSum = 0;
     static uint16_t lastPosition = 3500;
 
+    // 1. Line Isolation Logic
+    // We only accept sensors that are "connected" to the last known position.
+    // Sensors are at 0, 1000, 2000... 7000.
+    // If we were at 3500, valid sensors are 2, 3, 4, 5.
+    // Sensor 7 (Right Wing) would be distance 3500 -> IGNORED.
+
+    int activeSensors = 0;
+
     for(int i = 0; i < 8; i++)
     {
         uint16_t val = qtrCalibrated[i];
 
+        // Skip weak signals
+        if (val < 100) continue;
+
+        // TRACKING LOGIC:
+        // Calculate physical position of this specific sensor
+        int sensorPos = i * 1000;
+
+        // Calculate distance from previous robot position
+        int distance = sensorPos - lastPosition;
+        if(distance < 0) distance = -distance; // Absolute value
+
+        // Threshold: 2500 means "2.5 sensors away".
+        // If a sensor is more than 2 spots away from our line, it's a cross-line/noise.
+        // UNLESS: We haven't seen a line for a while (totalSum == 0), then we accept anything.
+        if (distance > 2500 && totalSum > 100)
+        {
+            // Ignore this sensor (It's the "Right Wing" 000110[11])
+            val = 0;
+        }
+
         totalSum += val;
-        weightedSum += (val * (i * 1000));
+        weightedSum += (val * sensorPos);
+        if(val > 0) activeSensors++;
     }
 
+    // 2. Lost Line Logic
     if (totalSum < 500) {
+        // If we see NOTHING, we don't update lastPosition.
+        // We return the last known position so PID keeps turning in that direction.
         return lastPosition;
     }
 
     uint16_t currentPosition = weightedSum / totalSum;
-
     lastPosition = currentPosition;
 
     return currentPosition;
 }
-
 void DrawGraphScreen(uint16_t position)
 {
     char lcdBuffer[20];
@@ -912,34 +996,33 @@ void DrawGraphScreen(uint16_t position)
 int I;
 void Run_PID(void)
 {
-    // 1. Get Position
     uint16_t position = CalculateLinePosition();
-
-    // 2. Calculate Error
     int error = position - 3500;
 
-    // 3. Calculate PID Terms
     int P = error;
     int D = error - lastError;
-    I = I + error ;
-    lastError = error; // Save for next loop
 
-    // 4. Calculate Correction
-    // MotorSpeed = (Kp * P) + (Kd * D)
-    float motorSpeed = (float)(Kp * P) + (Kd * D) + (Ki*I);
+    // INTEGRAL with WINDUP GUARD
+    I = I + error;
+    // Cap I at approx 1/3 of max speed worth of correction
+    if (I > 10000) I = 10000;
+    if (I < -10000) I = -10000;
 
-    // 5. Apply to Motors
-    // If error is positive (Right), Left Motor speeds up, Right slows down
+    lastError = error;
+
+    // Calculate Correction
+    // Note: Ki usually needs to be TINY (e.g., 0.001) for lines
+    float motorSpeed = (Kp * P) + (Kd * D) + (Ki * I);
+
     int rightMotorSpeed = baseSpeed - motorSpeed;
     int leftMotorSpeed = baseSpeed + motorSpeed;
 
-    // 6. Constrain Speeds (Don't exceed 1000 or go below -1000)
+    // Constrain
     if (rightMotorSpeed > maxSpeed) rightMotorSpeed = maxSpeed;
     if (leftMotorSpeed > maxSpeed) leftMotorSpeed = maxSpeed;
-    if (rightMotorSpeed < -1*maxSpeed) rightMotorSpeed = -1*maxSpeed;
-    if (leftMotorSpeed < -1*maxSpeed) leftMotorSpeed = -1*maxSpeed;
+    if (rightMotorSpeed < -maxSpeed) rightMotorSpeed = -maxSpeed;
+    if (leftMotorSpeed < -maxSpeed) leftMotorSpeed = -maxSpeed;
 
-    // 7. Output to Drivers
     SetMotorA(leftMotorSpeed);
     SetMotorB(rightMotorSpeed);
 }
